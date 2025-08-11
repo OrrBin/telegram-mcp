@@ -57,13 +57,19 @@ describe('MCP Server Integration', () => {
         'send_message',
         'search_messages',
         'mark_as_read',
-        'get_user_info'
+        'get_user_info',
+        'get_media_content',
+        'send_media',
+        'get_media_info'
       ];
 
       // This test verifies the tools are defined in the source
-      expect(expectedTools).toHaveLength(8);
+      expect(expectedTools).toHaveLength(11);
       expect(expectedTools).toContain('list_chats');
       expect(expectedTools).toContain('send_message');
+      expect(expectedTools).toContain('get_media_content');
+      expect(expectedTools).toContain('send_media');
+      expect(expectedTools).toContain('get_media_info');
     });
   });
 

@@ -40,6 +40,24 @@ export const GetUserInfoSchema = z.object({
   userId: z.string().min(1)
 });
 
+export const GetMediaContentSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1),
+  downloadPath: z.string().optional()
+});
+
+export const SendMediaSchema = z.object({
+  chatId: z.string().min(1),
+  filePath: z.string().min(1),
+  caption: z.string().optional(),
+  replyToMessageId: z.number().optional()
+});
+
+export const GetMediaInfoSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1)
+});
+
 export type ListChatsInput = z.infer<typeof ListChatsSchema>;
 export type GetChatInfoInput = z.infer<typeof GetChatInfoSchema>;
 export type SearchChatsInput = z.infer<typeof SearchChatsSchema>;
@@ -48,3 +66,6 @@ export type SendMessageInput = z.infer<typeof SendMessageSchema>;
 export type SearchMessagesInput = z.infer<typeof SearchMessagesSchema>;
 export type MarkAsReadInput = z.infer<typeof MarkAsReadSchema>;
 export type GetUserInfoInput = z.infer<typeof GetUserInfoSchema>;
+export type GetMediaContentInput = z.infer<typeof GetMediaContentSchema>;
+export type SendMediaInput = z.infer<typeof SendMediaSchema>;
+export type GetMediaInfoInput = z.infer<typeof GetMediaInfoSchema>;

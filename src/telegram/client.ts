@@ -1,10 +1,10 @@
 import { createClient, configure } from 'tdl';
 import { getTdjson } from 'prebuilt-tdlib';
 import { createReadStream, createWriteStream } from 'fs';
-import { mkdir } from 'fs/promises';
-import { dirname } from 'path';
+import { mkdir, access, constants } from 'fs/promises';
+import { dirname, join, extname } from 'path';
 import readline from 'readline';
-import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult } from './types.js';
+import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult, MediaInfo, MediaDownloadResult } from './types.js';
 import { Config } from '../config/index.js';
 import { Logger } from '../utils/Logger.js';
 
@@ -309,6 +309,241 @@ export class TelegramClient {
     }
   }
 
+  async getMediaContent(chatId: string, messageId: number, downloadPath?: string): Promise<MediaDownloadResult> {
+    await this.ensureConnected();
+
+    try {
+      // Get the message first to extract media info
+      const message = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+      });
+
+      if (!this.hasMedia(message)) {
+        throw new Error('Message does not contain media');
+      }
+
+      const file = this.extractFileFromMessage(message);
+      if (!file) {
+        throw new Error('Could not extract file information from message');
+      }
+
+      // Download the file
+      const downloadedFile = await this.client.invoke({
+        _: 'downloadFile',
+        file_id: file.id,
+        priority: 1,
+        offset: 0,
+        limit: 0,
+        synchronous: true,
+      });
+
+      const fileName = this.getFileName(message, file);
+      const finalPath = downloadPath ? join(downloadPath, fileName) : downloadedFile.local.path;
+
+      // If custom download path is specified, copy the file
+      if (downloadPath && downloadedFile.local.path !== finalPath) {
+        await mkdir(dirname(finalPath), { recursive: true });
+        const readStream = createReadStream(downloadedFile.local.path);
+        const writeStream = createWriteStream(finalPath);
+        await new Promise<void>((resolve, reject) => {
+          readStream.pipe(writeStream);
+          writeStream.on('finish', () => resolve());
+          writeStream.on('error', reject);
+        });
+      }
+
+      return {
+        filePath: finalPath,
+        fileName,
+        fileSize: file.size,
+        mimeType: this.getMimeType(message),
+      };
+    } catch (error) {
+      console.error(`Failed to get media content for message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  async sendMedia(chatId: string, filePath: string, caption?: string, replyToMessageId?: number): Promise<MessageInfo> {
+    await this.ensureConnected();
+
+    try {
+      // Check if file exists
+      await access(filePath, constants.F_OK);
+
+      // Upload the file first
+      const uploadedFile = await this.client.invoke({
+        _: 'uploadFile',
+        file: {
+          _: 'inputFileLocal',
+          path: filePath,
+        },
+        file_type: {
+          _: 'fileTypeDocument',
+        },
+        priority: 1,
+      });
+
+      // Determine the media type based on file extension
+      const ext = extname(filePath).toLowerCase();
+      let inputMessageContent;
+
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+        inputMessageContent = {
+          _: 'inputMessagePhoto',
+          photo: {
+            _: 'inputFileId',
+            id: uploadedFile.id,
+          },
+          caption: caption ? {
+            _: 'formattedText',
+            text: caption,
+            entities: [],
+          } : undefined,
+        };
+      } else if (['.mp4', '.avi', '.mov', '.mkv', '.webm'].includes(ext)) {
+        inputMessageContent = {
+          _: 'inputMessageVideo',
+          video: {
+            _: 'inputFileId',
+            id: uploadedFile.id,
+          },
+          caption: caption ? {
+            _: 'formattedText',
+            text: caption,
+            entities: [],
+          } : undefined,
+        };
+      } else {
+        inputMessageContent = {
+          _: 'inputMessageDocument',
+          document: {
+            _: 'inputFileId',
+            id: uploadedFile.id,
+          },
+          caption: caption ? {
+            _: 'formattedText',
+            text: caption,
+            entities: [],
+          } : undefined,
+        };
+      }
+
+      const message = await this.client.invoke({
+        _: 'sendMessage',
+        chat_id: parseInt(chatId),
+        reply_to_message_id: replyToMessageId || 0,
+        input_message_content: inputMessageContent,
+      });
+
+      return this.formatMessageInfo(message, chatId);
+    } catch (error) {
+      console.error(`Failed to send media to chat ${chatId}:`, error);
+      throw error;
+    }
+  }
+
+  async getMediaInfo(chatId: string, messageId: number): Promise<MediaInfo | null> {
+    await this.ensureConnected();
+
+    try {
+      const message = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+      });
+
+      if (!this.hasMedia(message)) {
+        return null;
+      }
+
+      const file = this.extractFileFromMessage(message);
+      if (!file) {
+        return null;
+      }
+
+      return {
+        fileId: file.id.toString(),
+        fileName: this.getFileName(message, file),
+        fileSize: file.size,
+        mimeType: this.getMimeType(message),
+        width: this.getMediaDimension(message, 'width'),
+        height: this.getMediaDimension(message, 'height'),
+        duration: this.getMediaDuration(message),
+        localPath: file.local?.path,
+      };
+    } catch (error) {
+      console.error(`Failed to get media info for message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  private hasMedia(message: any): boolean {
+    return !!(message.content?.photo || message.content?.video || message.content?.document || 
+              message.content?.audio || message.content?.voice_note || message.content?.sticker ||
+              message.content?.animation);
+  }
+
+  private extractFileFromMessage(message: any): any {
+    const content = message.content;
+    if (content.photo) return content.photo.sizes[content.photo.sizes.length - 1].photo;
+    if (content.video) return content.video.video;
+    if (content.document) return content.document.document;
+    if (content.audio) return content.audio.audio;
+    if (content.voice_note) return content.voice_note.voice;
+    if (content.sticker) return content.sticker.sticker;
+    if (content.animation) return content.animation.animation;
+    return null;
+  }
+
+  private getFileName(message: any, file: any): string {
+    const content = message.content;
+    if (content.document?.file_name) return content.document.file_name;
+    if (content.audio?.file_name) return content.audio.file_name;
+    
+    // Generate filename based on type
+    const messageId = message.id;
+    if (content.photo) return `photo_${messageId}.jpg`;
+    if (content.video) return `video_${messageId}.mp4`;
+    if (content.voice_note) return `voice_${messageId}.ogg`;
+    if (content.sticker) return `sticker_${messageId}.webp`;
+    if (content.animation) return `animation_${messageId}.gif`;
+    
+    return `file_${messageId}`;
+  }
+
+  private getMimeType(message: any): string | undefined {
+    const content = message.content;
+    if (content.document?.mime_type) return content.document.mime_type;
+    if (content.audio?.mime_type) return content.audio.mime_type;
+    if (content.video?.mime_type) return content.video.mime_type;
+    if (content.photo) return 'image/jpeg';
+    if (content.voice_note) return 'audio/ogg';
+    if (content.sticker) return 'image/webp';
+    if (content.animation) return 'image/gif';
+    return undefined;
+  }
+
+  private getMediaDimension(message: any, dimension: 'width' | 'height'): number | undefined {
+    const content = message.content;
+    if (content.photo) return content.photo[dimension];
+    if (content.video) return content.video[dimension];
+    if (content.sticker) return content.sticker[dimension];
+    if (content.animation) return content.animation[dimension];
+    return undefined;
+  }
+
+  private getMediaDuration(message: any): number | undefined {
+    const content = message.content;
+    if (content.video) return content.video.duration;
+    if (content.audio) return content.audio.duration;
+    if (content.voice_note) return content.voice_note.duration;
+    if (content.animation) return content.animation.duration;
+    return undefined;
+  }
+
   private async ensureConnected(): Promise<void> {
     if (!this.isConnected) {
       await this.connect();
@@ -362,16 +597,33 @@ export class TelegramClient {
       info.replyToMessageId = message.reply_to_message_id;
     }
 
-    // Handle different media types
+    // Handle different media types with enhanced info
     if (message.content?.photo) {
       info.mediaType = 'photo';
       info.mediaCaption = message.content.caption?.text;
+      info.mediaInfo = this.extractMediaInfo(message);
     } else if (message.content?.video) {
       info.mediaType = 'video';
       info.mediaCaption = message.content.caption?.text;
+      info.mediaInfo = this.extractMediaInfo(message);
     } else if (message.content?.document) {
       info.mediaType = 'document';
       info.mediaCaption = message.content.caption?.text;
+      info.mediaInfo = this.extractMediaInfo(message);
+    } else if (message.content?.audio) {
+      info.mediaType = 'audio';
+      info.mediaCaption = message.content.caption?.text;
+      info.mediaInfo = this.extractMediaInfo(message);
+    } else if (message.content?.voice_note) {
+      info.mediaType = 'voice';
+      info.mediaInfo = this.extractMediaInfo(message);
+    } else if (message.content?.sticker) {
+      info.mediaType = 'sticker';
+      info.mediaInfo = this.extractMediaInfo(message);
+    } else if (message.content?.animation) {
+      info.mediaType = 'animation';
+      info.mediaCaption = message.content.caption?.text;
+      info.mediaInfo = this.extractMediaInfo(message);
     }
 
     if (message.forward_info) {
@@ -379,6 +631,22 @@ export class TelegramClient {
     }
 
     return info;
+  }
+
+  private extractMediaInfo(message: any): MediaInfo | undefined {
+    const file = this.extractFileFromMessage(message);
+    if (!file) return undefined;
+
+    return {
+      fileId: file.id.toString(),
+      fileName: this.getFileName(message, file),
+      fileSize: file.size,
+      mimeType: this.getMimeType(message),
+      width: this.getMediaDimension(message, 'width'),
+      height: this.getMediaDimension(message, 'height'),
+      duration: this.getMediaDuration(message),
+      localPath: file.local?.path,
+    };
   }
 
   private formatUserInfo(user: any): UserInfo {

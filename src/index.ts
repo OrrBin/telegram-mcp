@@ -217,6 +217,72 @@ class TelegramMCPServer {
               required: ['userId'],
             },
           },
+          {
+            name: 'get_media_content',
+            description: 'Download media content from a message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID containing the media',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+                downloadPath: {
+                  type: 'string',
+                  description: 'Optional custom download path',
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
+          {
+            name: 'send_media',
+            description: 'Send media file to a chat',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID to send media to',
+                },
+                filePath: {
+                  type: 'string',
+                  description: 'Path to the media file to send',
+                },
+                caption: {
+                  type: 'string',
+                  description: 'Optional caption for the media',
+                },
+                replyToMessageId: {
+                  type: 'number',
+                  description: 'Optional message ID to reply to',
+                },
+              },
+              required: ['chatId', 'filePath'],
+            },
+          },
+          {
+            name: 'get_media_info',
+            description: 'Get information about media in a message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID containing the media',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
         ],
       };
     });
@@ -250,6 +316,15 @@ class TelegramMCPServer {
 
         case 'get_user_info':
           return await this.userHandler!.getUserInfo(args);
+
+        case 'get_media_content':
+          return await this.messageHandler!.getMediaContent(args);
+
+        case 'send_media':
+          return await this.messageHandler!.sendMedia(args);
+
+        case 'get_media_info':
+          return await this.messageHandler!.getMediaInfo(args);
 
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

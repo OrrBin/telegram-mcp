@@ -29,6 +29,26 @@ export interface MessageInfo {
   mediaType?: 'photo' | 'video' | 'document' | 'audio' | 'voice' | 'sticker' | 'animation';
   mediaCaption?: string;
   forwardedFrom?: string;
+  mediaInfo?: MediaInfo;
+}
+
+export interface MediaInfo {
+  fileId: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  thumbnailPath?: string;
+  localPath?: string;
+}
+
+export interface MediaDownloadResult {
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType?: string;
 }
 
 export interface UserInfo {

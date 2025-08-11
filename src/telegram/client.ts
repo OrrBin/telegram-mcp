@@ -4,7 +4,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { mkdir, access, constants } from 'fs/promises';
 import { dirname, join, extname } from 'path';
 import readline from 'readline';
-import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult, MediaInfo, MediaDownloadResult } from './types.js';
+import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult, MediaInfo, MediaDownloadResult, ForwardInfo, MessageContext } from './types.js';
 import { Config } from '../config/index.js';
 import { Logger } from '../utils/Logger.js';
 
@@ -544,6 +544,144 @@ export class TelegramClient {
     return undefined;
   }
 
+  async editMessage(chatId: string, messageId: number, newText: string): Promise<MessageInfo> {
+    await this.ensureConnected();
+
+    try {
+      const editedMessage = await this.client.invoke({
+        _: 'editMessageText',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+        input_message_content: {
+          _: 'inputMessageText',
+          text: {
+            _: 'formattedText',
+            text: newText,
+            entities: [],
+          },
+        },
+      });
+
+      return this.formatMessageInfo(editedMessage, chatId);
+    } catch (error) {
+      console.error(`Failed to edit message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteMessage(chatId: string, messageId: number): Promise<void> {
+    await this.ensureConnected();
+
+    try {
+      await this.client.invoke({
+        _: 'deleteMessages',
+        chat_id: parseInt(chatId),
+        message_ids: [messageId],
+        revoke: true,
+      });
+    } catch (error) {
+      console.error(`Failed to delete message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  async forwardMessage(fromChatId: string, messageId: number, toChatId: string): Promise<MessageInfo> {
+    await this.ensureConnected();
+
+    try {
+      const forwardedMessage = await this.client.invoke({
+        _: 'forwardMessages',
+        chat_id: parseInt(toChatId),
+        from_chat_id: parseInt(fromChatId),
+        message_ids: [messageId],
+        send_copy: false,
+        remove_caption: false,
+      });
+
+      // The API returns an array, get the first message
+      const messageData = forwardedMessage.messages?.[0] || forwardedMessage;
+      return this.formatMessageInfo(messageData, toChatId);
+    } catch (error) {
+      console.error(`Failed to forward message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  async getMessageContext(chatId: string, messageId: number, includeReplies = true, includeThread = false): Promise<MessageContext> {
+    await this.ensureConnected();
+
+    try {
+      // Get the main message
+      const message = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+      });
+
+      const formattedMessage = this.formatMessageInfo(message, chatId);
+      const context: MessageContext = {
+        message: formattedMessage,
+        replyChain: [],
+      };
+
+      // Build reply chain if requested
+      if (includeReplies && message.reply_to_message_id) {
+        context.replyChain = await this.buildReplyChain(chatId, message.reply_to_message_id);
+      }
+
+      // Get thread messages if requested (for topics/threads)
+      if (includeThread && message.message_thread_id) {
+        context.thread = await this.getThreadMessages(chatId, message.message_thread_id);
+      }
+
+      return context;
+    } catch (error) {
+      console.error(`Failed to get message context for ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  private async buildReplyChain(chatId: string, replyToMessageId: number, depth = 0): Promise<MessageInfo[]> {
+    if (depth > 10) return []; // Prevent infinite loops
+
+    try {
+      const replyMessage = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: replyToMessageId,
+      });
+
+      const formattedReply = this.formatMessageInfo(replyMessage, chatId);
+      const chain = [formattedReply];
+
+      // Continue building chain if this message is also a reply
+      if (replyMessage.reply_to_message_id) {
+        const parentChain = await this.buildReplyChain(chatId, replyMessage.reply_to_message_id, depth + 1);
+        chain.push(...parentChain);
+      }
+
+      return chain;
+    } catch (error) {
+      console.error(`Failed to get reply message ${replyToMessageId}:`, error);
+      return [];
+    }
+  }
+
+  private async getThreadMessages(chatId: string, messageThreadId: number): Promise<MessageInfo[]> {
+    try {
+      const threadMessages = await this.client.invoke({
+        _: 'getMessageThread',
+        chat_id: parseInt(chatId),
+        message_id: messageThreadId,
+      });
+
+      return threadMessages.messages?.map((msg: any) => this.formatMessageInfo(msg, chatId)) || [];
+    } catch (error) {
+      console.error(`Failed to get thread messages for ${messageThreadId}:`, error);
+      return [];
+    }
+  }
+
   private async ensureConnected(): Promise<void> {
     if (!this.isConnected) {
       await this.connect();
@@ -583,6 +721,10 @@ export class TelegramClient {
       chatId,
       date: message.date,
       isOutgoing: message.is_outgoing || false,
+      isEdited: !!message.edit_date,
+      editDate: message.edit_date,
+      canBeEdited: message.can_be_edited || false,
+      canBeDeleted: message.can_be_deleted_only_for_self || message.can_be_deleted_for_all_users || false,
     };
 
     if (message.sender_id) {
@@ -626,8 +768,37 @@ export class TelegramClient {
       info.mediaInfo = this.extractMediaInfo(message);
     }
 
+    // Enhanced forward information
     if (message.forward_info) {
-      info.forwardedFrom = 'Forwarded message';
+      info.forwardedFrom = this.extractForwardInfo(message.forward_info);
+    }
+
+    return info;
+  }
+
+  private extractForwardInfo(forwardInfo: any): ForwardInfo {
+    const info: ForwardInfo = {
+      date: forwardInfo.date,
+    };
+
+    if (forwardInfo.origin) {
+      switch (forwardInfo.origin._) {
+        case 'messageForwardOriginUser':
+          info.senderName = 'User'; // We'd need to fetch user info for the actual name
+          break;
+        case 'messageForwardOriginChat':
+          info.fromChatId = forwardInfo.origin.chat_id?.toString();
+          info.fromChatTitle = forwardInfo.origin.author_signature;
+          break;
+        case 'messageForwardOriginChannel':
+          info.fromChatId = forwardInfo.origin.chat_id?.toString();
+          info.fromMessageId = forwardInfo.origin.message_id;
+          info.isChannelPost = true;
+          break;
+        case 'messageForwardOriginHiddenUser':
+          info.senderName = forwardInfo.origin.sender_name;
+          break;
+      }
     }
 
     return info;

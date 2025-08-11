@@ -283,6 +283,96 @@ class TelegramMCPServer {
               required: ['messageId', 'chatId'],
             },
           },
+          {
+            name: 'edit_message',
+            description: 'Edit an existing message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID to edit',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+                newText: {
+                  type: 'string',
+                  description: 'The new text for the message',
+                },
+              },
+              required: ['messageId', 'chatId', 'newText'],
+            },
+          },
+          {
+            name: 'delete_message',
+            description: 'Delete a message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID to delete',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
+          {
+            name: 'forward_message',
+            description: 'Forward a message to another chat',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                fromChatId: {
+                  type: 'string',
+                  description: 'The source chat ID',
+                },
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID to forward',
+                },
+                toChatId: {
+                  type: 'string',
+                  description: 'The destination chat ID',
+                },
+              },
+              required: ['fromChatId', 'messageId', 'toChatId'],
+            },
+          },
+          {
+            name: 'get_message_context',
+            description: 'Get detailed context for a message including reply chain and thread',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID to get context for',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+                includeReplies: {
+                  type: 'boolean',
+                  description: 'Include reply chain (default: true)',
+                  default: true,
+                },
+                includeThread: {
+                  type: 'boolean',
+                  description: 'Include thread messages (default: false)',
+                  default: false,
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
         ],
       };
     });
@@ -325,6 +415,18 @@ class TelegramMCPServer {
 
         case 'get_media_info':
           return await this.messageHandler!.getMediaInfo(args);
+
+        case 'edit_message':
+          return await this.messageHandler!.editMessage(args);
+
+        case 'delete_message':
+          return await this.messageHandler!.deleteMessage(args);
+
+        case 'forward_message':
+          return await this.messageHandler!.forwardMessage(args);
+
+        case 'get_message_context':
+          return await this.messageHandler!.getMessageContext(args);
 
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

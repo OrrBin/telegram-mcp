@@ -26,10 +26,37 @@ export interface MessageInfo {
   date: number;
   isOutgoing: boolean;
   replyToMessageId?: number;
+  replyToMessage?: MessageInfo;
   mediaType?: 'photo' | 'video' | 'document' | 'audio' | 'voice' | 'sticker' | 'animation';
   mediaCaption?: string;
-  forwardedFrom?: string;
+  forwardedFrom?: ForwardInfo;
   mediaInfo?: MediaInfo;
+  editDate?: number;
+  isEdited?: boolean;
+  canBeEdited?: boolean;
+  canBeDeleted?: boolean;
+  messageThread?: MessageThread;
+}
+
+export interface ForwardInfo {
+  fromChatId?: string;
+  fromChatTitle?: string;
+  fromMessageId?: number;
+  senderName?: string;
+  date?: number;
+  isChannelPost?: boolean;
+}
+
+export interface MessageThread {
+  messageThreadId: number;
+  messages: MessageInfo[];
+}
+
+export interface MessageContext {
+  message: MessageInfo;
+  replyChain: MessageInfo[];
+  thread?: MessageInfo[];
+  forwardHistory?: ForwardInfo[];
 }
 
 export interface MediaInfo {

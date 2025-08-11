@@ -8,13 +8,21 @@ import {
   GetMediaContentSchema,
   SendMediaSchema,
   GetMediaInfoSchema,
+  EditMessageSchema,
+  DeleteMessageSchema,
+  ForwardMessageSchema,
+  GetMessageContextSchema,
   type GetMessagesInput,
   type SendMessageInput,
   type SearchMessagesInput,
   type MarkAsReadInput,
   type GetMediaContentInput,
   type SendMediaInput,
-  type GetMediaInfoInput
+  type GetMediaInfoInput,
+  type EditMessageInput,
+  type DeleteMessageInput,
+  type ForwardMessageInput,
+  type GetMessageContextInput
 } from '../schemas/index.js';
 import { ErrorHandler } from '../utils/ErrorHandler.js';
 
@@ -46,7 +54,11 @@ export class MessageHandler {
                 (msg.mediaInfo ? `File: ${msg.mediaInfo.fileName} (${msg.mediaInfo.fileSize} bytes)\n` : '') +
                 (msg.mediaCaption ? `Caption: ${msg.mediaCaption}\n` : '') +
                 (msg.replyToMessageId ? `Reply to: ${msg.replyToMessageId}\n` : '') +
-                '---\n'
+                (msg.isEdited ? `✏️ Edited: ${new Date((msg.editDate || 0) * 1000).toLocaleString()}\n` : '') +
+                (msg.forwardedFrom ? `📤 Forwarded from: ${msg.forwardedFrom.senderName || msg.forwardedFrom.fromChatTitle || 'Unknown'}\n` : '') +
+                (msg.canBeEdited ? '✏️ Can edit | ' : '') +
+                (msg.canBeDeleted ? '🗑️ Can delete' : '') +
+                '\n---\n'
               ).join('\n'),
           },
         ],
@@ -191,6 +203,118 @@ export class MessageHandler {
               (mediaInfo.localPath ? `• **Local Path:** ${mediaInfo.localPath}\n` : '') +
               `• **Message ID:** ${validated.messageId}\n` +
               `• **Chat ID:** ${validated.chatId}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async editMessage(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = EditMessageSchema.parse(args);
+      const editedMessage = await this.client.editMessage(validated.chatId, validated.messageId, validated.newText);
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✅ **Message edited successfully!**\n\n` +
+              `• **Chat ID:** ${editedMessage.chatId}\n` +
+              `• **Message ID:** ${editedMessage.id}\n` +
+              `• **New Text:** ${editedMessage.text}\n` +
+              `• **Edited at:** ${new Date((editedMessage.editDate || editedMessage.date) * 1000).toLocaleString()}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async deleteMessage(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = DeleteMessageSchema.parse(args);
+      await this.client.deleteMessage(validated.chatId, validated.messageId);
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✅ **Message deleted successfully!**\n\n` +
+              `• **Chat ID:** ${validated.chatId}\n` +
+              `• **Message ID:** ${validated.messageId}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async forwardMessage(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = ForwardMessageSchema.parse(args);
+      const forwardedMessage = await this.client.forwardMessage(validated.fromChatId, validated.messageId, validated.toChatId);
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✅ **Message forwarded successfully!**\n\n` +
+              `• **From Chat ID:** ${validated.fromChatId}\n` +
+              `• **To Chat ID:** ${validated.toChatId}\n` +
+              `• **Original Message ID:** ${validated.messageId}\n` +
+              `• **New Message ID:** ${forwardedMessage.id}\n` +
+              `• **Forwarded at:** ${new Date(forwardedMessage.date * 1000).toLocaleString()}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async getMessageContext(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = GetMessageContextSchema.parse(args);
+      const context = await this.client.getMessageContext(
+        validated.chatId, 
+        validated.messageId, 
+        validated.includeReplies, 
+        validated.includeThread
+      );
+      
+      let contextText = `📄 **Message Context**\n\n`;
+      
+      // Main message
+      contextText += `**Main Message (${context.message.id})**\n`;
+      contextText += `${context.message.isOutgoing ? '→' : '←'} ${context.message.senderName || context.message.senderId || 'Unknown'}\n`;
+      contextText += `${context.message.text || '[Media message]'}\n`;
+      contextText += `Date: ${new Date(context.message.date * 1000).toLocaleString()}\n`;
+      if (context.message.isEdited) {
+        contextText += `✏️ Edited: ${new Date((context.message.editDate || 0) * 1000).toLocaleString()}\n`;
+      }
+      contextText += '\n';
+      
+      // Reply chain
+      if (context.replyChain.length > 0) {
+        contextText += `**Reply Chain (${context.replyChain.length} messages):**\n`;
+        context.replyChain.forEach((reply, index) => {
+          contextText += `${index + 1}. Message ${reply.id}: ${reply.text || '[Media]'}\n`;
+          contextText += `   From: ${reply.senderName || reply.senderId || 'Unknown'}\n`;
+          contextText += `   Date: ${new Date(reply.date * 1000).toLocaleString()}\n\n`;
+        });
+      }
+      
+      // Thread messages
+      if (context.thread && context.thread.length > 0) {
+        contextText += `**Thread Messages (${context.thread.length} messages):**\n`;
+        context.thread.forEach((threadMsg, index) => {
+          contextText += `${index + 1}. Message ${threadMsg.id}: ${threadMsg.text || '[Media]'}\n`;
+          contextText += `   From: ${threadMsg.senderName || threadMsg.senderId || 'Unknown'}\n`;
+          contextText += `   Date: ${new Date(threadMsg.date * 1000).toLocaleString()}\n\n`;
+        });
+      }
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: contextText,
           },
         ],
       };

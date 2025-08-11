@@ -58,6 +58,30 @@ export const GetMediaInfoSchema = z.object({
   chatId: z.string().min(1)
 });
 
+export const EditMessageSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1),
+  newText: z.string().min(1)
+});
+
+export const DeleteMessageSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1)
+});
+
+export const ForwardMessageSchema = z.object({
+  fromChatId: z.string().min(1),
+  messageId: z.number(),
+  toChatId: z.string().min(1)
+});
+
+export const GetMessageContextSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1),
+  includeReplies: z.boolean().default(true),
+  includeThread: z.boolean().default(false)
+});
+
 export type ListChatsInput = z.infer<typeof ListChatsSchema>;
 export type GetChatInfoInput = z.infer<typeof GetChatInfoSchema>;
 export type SearchChatsInput = z.infer<typeof SearchChatsSchema>;
@@ -69,3 +93,7 @@ export type GetUserInfoInput = z.infer<typeof GetUserInfoSchema>;
 export type GetMediaContentInput = z.infer<typeof GetMediaContentSchema>;
 export type SendMediaInput = z.infer<typeof SendMediaSchema>;
 export type GetMediaInfoInput = z.infer<typeof GetMediaInfoSchema>;
+export type EditMessageInput = z.infer<typeof EditMessageSchema>;
+export type DeleteMessageInput = z.infer<typeof DeleteMessageSchema>;
+export type ForwardMessageInput = z.infer<typeof ForwardMessageSchema>;
+export type GetMessageContextInput = z.infer<typeof GetMessageContextSchema>;

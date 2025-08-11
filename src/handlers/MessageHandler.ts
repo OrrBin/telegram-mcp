@@ -12,6 +12,9 @@ import {
   DeleteMessageSchema,
   ForwardMessageSchema,
   GetMessageContextSchema,
+  SendDocumentSchema,
+  DownloadFileSchema,
+  GetFileInfoSchema,
   type GetMessagesInput,
   type SendMessageInput,
   type SearchMessagesInput,
@@ -22,7 +25,10 @@ import {
   type EditMessageInput,
   type DeleteMessageInput,
   type ForwardMessageInput,
-  type GetMessageContextInput
+  type GetMessageContextInput,
+  type SendDocumentInput,
+  type DownloadFileInput,
+  type GetFileInfoInput
 } from '../schemas/index.js';
 import { ErrorHandler } from '../utils/ErrorHandler.js';
 
@@ -315,6 +321,86 @@ export class MessageHandler {
           {
             type: 'text' as const,
             text: contextText,
+          },
+        ],
+      };
+    });
+  }
+
+  async sendDocument(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = SendDocumentSchema.parse(args);
+      const sentMessage = await this.client.sendDocument(validated.chatId, validated.filePath, validated.caption, validated.replyToMessageId);
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✅ **Document sent successfully!**\n\n` +
+              `• **Chat ID:** ${sentMessage.chatId}\n` +
+              `• **Message ID:** ${sentMessage.id}\n` +
+              `• **File Path:** ${validated.filePath}\n` +
+              (validated.caption ? `• **Caption:** ${validated.caption}\n` : '') +
+              `• **Sent at:** ${new Date(sentMessage.date * 1000).toLocaleString()}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async downloadFile(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = DownloadFileSchema.parse(args);
+      const result = await this.client.downloadFile(validated.chatId, validated.messageId, validated.outputPath);
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✅ **File downloaded successfully!**\n\n` +
+              `• **File Path:** ${result.filePath}\n` +
+              `• **File Name:** ${result.fileName}\n` +
+              `• **File Size:** ${result.fileSize} bytes\n` +
+              `• **MIME Type:** ${result.mimeType || 'Unknown'}\n` +
+              `• **Message ID:** ${validated.messageId}\n` +
+              `• **Chat ID:** ${validated.chatId}`,
+          },
+        ],
+      };
+    });
+  }
+
+  async getFileInfo(args: unknown): Promise<CallToolResult> {
+    return ErrorHandler.withErrorHandling(async () => {
+      const validated = GetFileInfoSchema.parse(args);
+      const fileInfo = await this.client.getFileInfo(validated.chatId, validated.messageId);
+      
+      if (!fileInfo) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `❌ **No file found in message ${validated.messageId}**`,
+            },
+          ],
+        };
+      }
+      
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `📁 **File Information**\n\n` +
+              `• **File ID:** ${fileInfo.id}\n` +
+              `• **Size:** ${fileInfo.size} bytes\n` +
+              `• **Expected Size:** ${fileInfo.expectedSize} bytes\n` +
+              `• **Can Be Downloaded:** ${fileInfo.canBeDownloaded ? 'Yes' : 'No'}\n` +
+              `• **Download Status:** ${fileInfo.isDownloadingCompleted ? 'Completed' : fileInfo.isDownloadingActive ? 'In Progress' : 'Not Started'}\n` +
+              `• **Downloaded:** ${fileInfo.downloadedSize} bytes (${Math.round((fileInfo.downloadedSize / fileInfo.size) * 100)}%)\n` +
+              (fileInfo.localPath ? `• **Local Path:** ${fileInfo.localPath}\n` : '') +
+              (fileInfo.remotePath ? `• **Remote Path:** ${fileInfo.remotePath}\n` : '') +
+              `• **Message ID:** ${validated.messageId}\n` +
+              `• **Chat ID:** ${validated.chatId}`,
           },
         ],
       };

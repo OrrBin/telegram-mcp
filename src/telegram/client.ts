@@ -4,7 +4,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { mkdir, access, constants } from 'fs/promises';
 import { dirname, join, extname } from 'path';
 import readline from 'readline';
-import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult, MediaInfo, MediaDownloadResult, ForwardInfo, MessageContext } from './types.js';
+import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult, MediaInfo, MediaDownloadResult, ForwardInfo, MessageContext, FileInfo, DocumentInfo } from './types.js';
 import { Config } from '../config/index.js';
 import { Logger } from '../utils/Logger.js';
 
@@ -679,6 +679,145 @@ export class TelegramClient {
     } catch (error) {
       console.error(`Failed to get thread messages for ${messageThreadId}:`, error);
       return [];
+    }
+  }
+
+  async sendDocument(chatId: string, filePath: string, caption?: string, replyToMessageId?: number): Promise<MessageInfo> {
+    await this.ensureConnected();
+
+    try {
+      // Check if file exists
+      await access(filePath, constants.F_OK);
+
+      // Upload the file first
+      const uploadedFile = await this.client.invoke({
+        _: 'uploadFile',
+        file: {
+          _: 'inputFileLocal',
+          path: filePath,
+        },
+        file_type: {
+          _: 'fileTypeDocument',
+        },
+        priority: 1,
+      });
+
+      const message = await this.client.invoke({
+        _: 'sendMessage',
+        chat_id: parseInt(chatId),
+        reply_to_message_id: replyToMessageId || 0,
+        input_message_content: {
+          _: 'inputMessageDocument',
+          document: {
+            _: 'inputFileId',
+            id: uploadedFile.id,
+          },
+          caption: caption ? {
+            _: 'formattedText',
+            text: caption,
+            entities: [],
+          } : undefined,
+        },
+      });
+
+      return this.formatMessageInfo(message, chatId);
+    } catch (error) {
+      console.error(`Failed to send document to chat ${chatId}:`, error);
+      throw error;
+    }
+  }
+
+  async downloadFile(chatId: string, messageId: number, outputPath?: string): Promise<MediaDownloadResult> {
+    await this.ensureConnected();
+
+    try {
+      // Get the message first to extract file info
+      const message = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+      });
+
+      if (!this.hasMedia(message)) {
+        throw new Error('Message does not contain a file');
+      }
+
+      const file = this.extractFileFromMessage(message);
+      if (!file) {
+        throw new Error('Could not extract file information from message');
+      }
+
+      // Download the file
+      const downloadedFile = await this.client.invoke({
+        _: 'downloadFile',
+        file_id: file.id,
+        priority: 1,
+        offset: 0,
+        limit: 0,
+        synchronous: true,
+      });
+
+      const fileName = this.getFileName(message, file);
+      const finalPath = outputPath ? join(outputPath, fileName) : downloadedFile.local.path;
+
+      // If custom output path is specified, copy the file
+      if (outputPath && downloadedFile.local.path !== finalPath) {
+        await mkdir(dirname(finalPath), { recursive: true });
+        const readStream = createReadStream(downloadedFile.local.path);
+        const writeStream = createWriteStream(finalPath);
+        await new Promise<void>((resolve, reject) => {
+          readStream.pipe(writeStream);
+          writeStream.on('finish', () => resolve());
+          writeStream.on('error', reject);
+        });
+      }
+
+      return {
+        filePath: finalPath,
+        fileName,
+        fileSize: file.size,
+        mimeType: this.getMimeType(message),
+      };
+    } catch (error) {
+      console.error(`Failed to download file from message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  async getFileInfo(chatId: string, messageId: number): Promise<FileInfo | null> {
+    await this.ensureConnected();
+
+    try {
+      const message = await this.client.invoke({
+        _: 'getMessage',
+        chat_id: parseInt(chatId),
+        message_id: messageId,
+      });
+
+      if (!this.hasMedia(message)) {
+        return null;
+      }
+
+      const file = this.extractFileFromMessage(message);
+      if (!file) {
+        return null;
+      }
+
+      return {
+        id: file.id.toString(),
+        size: file.size,
+        expectedSize: file.expected_size || file.size,
+        localPath: file.local?.path,
+        remotePath: file.remote?.id,
+        canBeDownloaded: file.local?.can_be_downloaded || false,
+        isDownloadingActive: file.local?.is_downloading_active || false,
+        isDownloadingCompleted: file.local?.is_downloading_completed || false,
+        downloadedPrefixSize: file.local?.downloaded_prefix_size || 0,
+        downloadedSize: file.local?.downloaded_size || 0,
+      };
+    } catch (error) {
+      console.error(`Failed to get file info for message ${messageId}:`, error);
+      throw error;
     }
   }
 

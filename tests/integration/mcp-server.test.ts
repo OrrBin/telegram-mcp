@@ -64,11 +64,14 @@ describe('MCP Server Integration', () => {
         'edit_message',
         'delete_message',
         'forward_message',
-        'get_message_context'
+        'get_message_context',
+        'send_document',
+        'download_file',
+        'get_file_info'
       ];
 
       // This test verifies the tools are defined in the source
-      expect(expectedTools).toHaveLength(15);
+      expect(expectedTools).toHaveLength(18);
       expect(expectedTools).toContain('list_chats');
       expect(expectedTools).toContain('send_message');
       expect(expectedTools).toContain('get_media_content');
@@ -78,6 +81,9 @@ describe('MCP Server Integration', () => {
       expect(expectedTools).toContain('delete_message');
       expect(expectedTools).toContain('forward_message');
       expect(expectedTools).toContain('get_message_context');
+      expect(expectedTools).toContain('send_document');
+      expect(expectedTools).toContain('download_file');
+      expect(expectedTools).toContain('get_file_info');
     });
   });
 

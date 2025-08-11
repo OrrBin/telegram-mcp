@@ -373,6 +373,72 @@ class TelegramMCPServer {
               required: ['messageId', 'chatId'],
             },
           },
+          {
+            name: 'send_document',
+            description: 'Send a document file to a chat',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID to send document to',
+                },
+                filePath: {
+                  type: 'string',
+                  description: 'Path to the document file to send',
+                },
+                caption: {
+                  type: 'string',
+                  description: 'Optional caption for the document',
+                },
+                replyToMessageId: {
+                  type: 'number',
+                  description: 'Optional message ID to reply to',
+                },
+              },
+              required: ['chatId', 'filePath'],
+            },
+          },
+          {
+            name: 'download_file',
+            description: 'Download a file from a message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID containing the file',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+                outputPath: {
+                  type: 'string',
+                  description: 'Optional custom output directory path',
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
+          {
+            name: 'get_file_info',
+            description: 'Get detailed information about a file in a message',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                messageId: {
+                  type: 'number',
+                  description: 'The message ID containing the file',
+                },
+                chatId: {
+                  type: 'string',
+                  description: 'The chat ID containing the message',
+                },
+              },
+              required: ['messageId', 'chatId'],
+            },
+          },
         ],
       };
     });
@@ -427,6 +493,15 @@ class TelegramMCPServer {
 
         case 'get_message_context':
           return await this.messageHandler!.getMessageContext(args);
+
+        case 'send_document':
+          return await this.messageHandler!.sendDocument(args);
+
+        case 'download_file':
+          return await this.messageHandler!.downloadFile(args);
+
+        case 'get_file_info':
+          return await this.messageHandler!.getFileInfo(args);
 
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

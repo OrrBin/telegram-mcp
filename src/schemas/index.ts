@@ -82,6 +82,24 @@ export const GetMessageContextSchema = z.object({
   includeThread: z.boolean().default(false)
 });
 
+export const SendDocumentSchema = z.object({
+  chatId: z.string().min(1),
+  filePath: z.string().min(1),
+  caption: z.string().optional(),
+  replyToMessageId: z.number().optional()
+});
+
+export const DownloadFileSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1),
+  outputPath: z.string().optional()
+});
+
+export const GetFileInfoSchema = z.object({
+  messageId: z.number(),
+  chatId: z.string().min(1)
+});
+
 export type ListChatsInput = z.infer<typeof ListChatsSchema>;
 export type GetChatInfoInput = z.infer<typeof GetChatInfoSchema>;
 export type SearchChatsInput = z.infer<typeof SearchChatsSchema>;
@@ -97,3 +115,6 @@ export type EditMessageInput = z.infer<typeof EditMessageSchema>;
 export type DeleteMessageInput = z.infer<typeof DeleteMessageSchema>;
 export type ForwardMessageInput = z.infer<typeof ForwardMessageSchema>;
 export type GetMessageContextInput = z.infer<typeof GetMessageContextSchema>;
+export type SendDocumentInput = z.infer<typeof SendDocumentSchema>;
+export type DownloadFileInput = z.infer<typeof DownloadFileSchema>;
+export type GetFileInfoInput = z.infer<typeof GetFileInfoSchema>;

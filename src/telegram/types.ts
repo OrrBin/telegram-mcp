@@ -91,6 +91,26 @@ export interface UserInfo {
   status?: string;
 }
 
+export interface FileInfo {
+  id: string;
+  size: number;
+  expectedSize: number;
+  localPath?: string;
+  remotePath?: string;
+  canBeDownloaded: boolean;
+  isDownloadingActive: boolean;
+  isDownloadingCompleted: boolean;
+  downloadedPrefixSize: number;
+  downloadedSize: number;
+}
+
+export interface DocumentInfo {
+  fileName: string;
+  mimeType?: string;
+  thumbnail?: MediaInfo;
+  file: FileInfo;
+}
+
 export interface SearchResult {
   messages: MessageInfo[];
   totalCount: number;

@@ -1,0 +1,74 @@
+import { z } from 'zod';
+import type { TelegramConfig } from '../telegram/types.js';
+
+const TelegramConfigSchema = z.object({
+  apiId: z.string().transform(val => parseInt(val, 10)),
+  apiHash: z.string().min(1),
+  phone: z.string().min(1),
+  sessionDir: z.string().default('./session')
+});
+
+const ServerConfigSchema = z.object({
+  name: z.string().default('telegram-mcp-server'),
+  version: z.string().default('1.0.0'),
+  nodeEnv: z.enum(['development', 'production', 'test']).default('production')
+});
+
+export class Config {
+  private static instance: Config;
+  
+  readonly telegram: TelegramConfig;
+  readonly server: {
+    name: string;
+    version: string;
+    nodeEnv: 'development' | 'production' | 'test';
+  };
+
+  private constructor() {
+    this.telegram = this.loadTelegramConfig();
+    this.server = this.loadServerConfig();
+  }
+
+  static getInstance(): Config {
+    if (!Config.instance) {
+      Config.instance = new Config();
+    }
+    return Config.instance;
+  }
+
+  private loadTelegramConfig(): TelegramConfig {
+    const config = TelegramConfigSchema.parse({
+      apiId: process.env.TELEGRAM_API_ID,
+      apiHash: process.env.TELEGRAM_API_HASH,
+      phone: process.env.TELEGRAM_PHONE,
+      sessionDir: process.env.SESSION_DIR
+    });
+
+    return {
+      apiId: config.apiId,
+      apiHash: config.apiHash,
+      phone: config.phone,
+      sessionDir: config.sessionDir
+    };
+  }
+
+  private loadServerConfig() {
+    return ServerConfigSchema.parse({
+      name: process.env.SERVER_NAME,
+      version: process.env.SERVER_VERSION,
+      nodeEnv: process.env.NODE_ENV
+    });
+  }
+
+  isDevelopment(): boolean {
+    return this.server.nodeEnv === 'development';
+  }
+
+  isProduction(): boolean {
+    return this.server.nodeEnv === 'production';
+  }
+
+  isTest(): boolean {
+    return this.server.nodeEnv === 'test';
+  }
+}

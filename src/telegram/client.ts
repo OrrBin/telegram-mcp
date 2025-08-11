@@ -5,6 +5,7 @@ import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import readline from 'readline';
 import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult } from './types.js';
+import { Config } from '../config/index.js';
 
 export class TelegramClient {
   private client: ReturnType<typeof createClient>;
@@ -13,11 +14,12 @@ export class TelegramClient {
 
   constructor(config: TelegramConfig) {
     this.config = config;
+    const appConfig = Config.getInstance();
     
     // Configure tdl to use prebuilt TDLib
     configure({
       tdjson: getTdjson(),
-      verbosityLevel: process.env.NODE_ENV === 'development' ? 3 : 1,
+      verbosityLevel: appConfig.isDevelopment() ? 3 : 1,
     });
     
     // Ensure session directory exists
@@ -34,13 +36,15 @@ export class TelegramClient {
   }
 
   private setupEventHandlers() {
+    const appConfig = Config.getInstance();
+    
     this.client.on('error', (error: any) => {
       console.error('Telegram client error:', error);
     });
 
     this.client.on('update', (update: any) => {
       // Handle real-time updates if needed
-      if (process.env.NODE_ENV === 'development') {
+      if (appConfig.isDevelopment()) {
         console.error('Update received:', update._);
       }
     });

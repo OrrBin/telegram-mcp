@@ -9,10 +9,10 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { TelegramClient } from './telegram/client.js';
-import type { TelegramConfig } from './telegram/types.js';
 import { ChatHandler } from './handlers/ChatHandler.js';
 import { MessageHandler } from './handlers/MessageHandler.js';
 import { UserHandler } from './handlers/UserHandler.js';
+import { Config } from './config/index.js';
 
 class TelegramMCPServer {
   private server: Server;
@@ -20,12 +20,15 @@ class TelegramMCPServer {
   private chatHandler: ChatHandler | null = null;
   private messageHandler: MessageHandler | null = null;
   private userHandler: UserHandler | null = null;
+  private config: Config;
 
   constructor() {
+    this.config = Config.getInstance();
+    
     this.server = new Server(
       {
-        name: 'telegram-mcp-server',
-        version: '1.0.0',
+        name: this.config.server.name,
+        version: this.config.server.version,
       },
       {
         capabilities: {
@@ -38,30 +41,9 @@ class TelegramMCPServer {
     this.setupErrorHandling();
   }
 
-  private loadConfig(): TelegramConfig {
-    const apiId = process.env.TELEGRAM_API_ID;
-    const apiHash = process.env.TELEGRAM_API_HASH;
-    const phone = process.env.TELEGRAM_PHONE;
-
-    if (!apiId || !apiHash || !phone) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        'Missing required environment variables: TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_PHONE'
-      );
-    }
-
-    return {
-      apiId: parseInt(apiId),
-      apiHash,
-      phone,
-      sessionDir: process.env.SESSION_DIR || './session',
-    };
-  }
-
   private async getTelegramClient(): Promise<TelegramClient> {
     if (!this.telegramClient) {
-      const config = this.loadConfig();
-      this.telegramClient = new TelegramClient(config);
+      this.telegramClient = new TelegramClient(this.config.telegram);
       await this.telegramClient.connect();
       
       // Initialize handlers

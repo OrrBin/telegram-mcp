@@ -10,10 +10,16 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { TelegramClient } from './telegram/client.js';
 import type { TelegramConfig } from './telegram/types.js';
+import { ChatHandler } from './handlers/ChatHandler.js';
+import { MessageHandler } from './handlers/MessageHandler.js';
+import { UserHandler } from './handlers/UserHandler.js';
 
 class TelegramMCPServer {
   private server: Server;
   private telegramClient: TelegramClient | null = null;
+  private chatHandler: ChatHandler | null = null;
+  private messageHandler: MessageHandler | null = null;
+  private userHandler: UserHandler | null = null;
 
   constructor() {
     this.server = new Server(
@@ -57,6 +63,11 @@ class TelegramMCPServer {
       const config = this.loadConfig();
       this.telegramClient = new TelegramClient(config);
       await this.telegramClient.connect();
+      
+      // Initialize handlers
+      this.chatHandler = new ChatHandler(this.telegramClient);
+      this.messageHandler = new MessageHandler(this.telegramClient);
+      this.userHandler = new UserHandler(this.telegramClient);
     }
     return this.telegramClient;
   }
@@ -231,32 +242,32 @@ class TelegramMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
-        const client = await this.getTelegramClient();
+        await this.getTelegramClient();
 
         switch (name) {
           case 'list_chats':
-            return await this.listChats(client, args);
+            return await this.chatHandler!.listChats(args as any);
 
           case 'get_chat_info':
-            return await this.getChatInfo(client, args);
+            return await this.chatHandler!.getChatInfo(args as any);
 
           case 'search_chats':
-            return await this.searchChats(client, args);
+            return await this.chatHandler!.searchChats(args as any);
 
           case 'get_messages':
-            return await this.getMessages(client, args);
+            return await this.messageHandler!.getMessages(args as any);
 
           case 'send_message':
-            return await this.sendMessage(client, args);
+            return await this.messageHandler!.sendMessage(args as any);
 
           case 'search_messages':
-            return await this.searchMessages(client, args);
+            return await this.messageHandler!.searchMessages(args as any);
 
           case 'mark_as_read':
-            return await this.markAsRead(client, args);
+            return await this.messageHandler!.markAsRead(args as any);
 
           case 'get_user_info':
-            return await this.getUserInfo(client, args);
+            return await this.userHandler!.getUserInfo(args as any);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
@@ -271,178 +282,6 @@ class TelegramMCPServer {
         );
       }
     });
-  }
-
-  // Tool implementations
-  private async listChats(client: TelegramClient, args: any) {
-    const limit = args.limit || 50;
-    const chats = await client.getChats(limit);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Found ${chats.length} chats:\n\n` +
-            chats.map(chat => 
-              `• **${chat.title}** (${chat.type})\n` +
-              `  ID: ${chat.id}\n` +
-              (chat.username ? `  Username: @${chat.username}\n` : '') +
-              (chat.memberCount ? `  Members: ${chat.memberCount}\n` : '') +
-              (chat.description ? `  Description: ${chat.description.substring(0, 100)}${chat.description.length > 100 ? '...' : ''}\n` : '')
-            ).join('\n'),
-        },
-      ],
-    };
-  }
-
-  private async getChatInfo(client: TelegramClient, args: any) {
-    const chatInfo = await client.getChatInfo(args.chatId);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `**Chat Information:**\n\n` +
-            `• **Title:** ${chatInfo.title}\n` +
-            `• **ID:** ${chatInfo.id}\n` +
-            `• **Type:** ${chatInfo.type}\n` +
-            (chatInfo.username ? `• **Username:** @${chatInfo.username}\n` : '') +
-            (chatInfo.memberCount ? `• **Members:** ${chatInfo.memberCount}\n` : '') +
-            (chatInfo.description ? `• **Description:** ${chatInfo.description}\n` : '') +
-            (chatInfo.isVerified ? `• **Verified:** Yes\n` : '') +
-            (chatInfo.isScam ? `• **Scam:** Yes\n` : '') +
-            (chatInfo.isFake ? `• **Fake:** Yes\n` : ''),
-        },
-      ],
-    };
-  }
-
-  private async searchChats(client: TelegramClient, args: any) {
-    const allChats = await client.getChats(200);
-    const filteredChats = allChats
-      .filter(chat => 
-        chat.title.toLowerCase().includes(args.query.toLowerCase()) ||
-        (chat.username && chat.username.toLowerCase().includes(args.query.toLowerCase()))
-      )
-      .slice(0, args.limit || 20);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Found ${filteredChats.length} chats matching "${args.query}":\n\n` +
-            filteredChats.map(chat => 
-              `• **${chat.title}** (${chat.type})\n` +
-              `  ID: ${chat.id}\n` +
-              (chat.username ? `  Username: @${chat.username}\n` : '')
-            ).join('\n'),
-        },
-      ],
-    };
-  }
-
-  private async getMessages(client: TelegramClient, args: any) {
-    // Handle special case for user's own messages (Saved Messages)
-    let chatId = args.chatId;
-    if (chatId === 'me' || chatId === 'self') {
-      // Get user's own ID for Saved Messages
-      const me = await client.getMe();
-      chatId = me.id.toString();
-    }
-    
-    const messages = await client.getMessages(chatId, args.limit || 20, args.fromMessageId);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `**Messages from chat ${args.chatId}:**\n\n` +
-            messages.map(msg => 
-              `**Message ${msg.id}** (${new Date(msg.date * 1000).toLocaleString()})\n` +
-              `${msg.isOutgoing ? '→' : '←'} ${msg.senderName || msg.senderId || 'Unknown'}\n` +
-              `${msg.text || '[Media message]'}\n` +
-              (msg.mediaType ? `Media: ${msg.mediaType}\n` : '') +
-              (msg.replyToMessageId ? `Reply to: ${msg.replyToMessageId}\n` : '') +
-              '---\n'
-            ).join('\n'),
-        },
-      ],
-    };
-  }
-
-  private async sendMessage(client: TelegramClient, args: any) {
-    const sentMessage = await client.sendMessage(args.chatId, args.text, args.replyToMessageId);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `✅ **Message sent successfully!**\n\n` +
-            `• **Chat ID:** ${sentMessage.chatId}\n` +
-            `• **Message ID:** ${sentMessage.id}\n` +
-            `• **Text:** ${sentMessage.text}\n` +
-            `• **Sent at:** ${new Date(sentMessage.date * 1000).toLocaleString()}`,
-        },
-      ],
-    };
-  }
-
-  private async searchMessages(client: TelegramClient, args: any) {
-    const searchResult = await client.searchMessages(args.query, args.chatId, args.limit || 20);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `**Search results for "${args.query}":**\n` +
-            `Found ${searchResult.totalCount} total matches, showing ${searchResult.messages.length}:\n\n` +
-            searchResult.messages.map(msg => 
-              `**Message ${msg.id}** in chat ${msg.chatId} (${new Date(msg.date * 1000).toLocaleString()})\n` +
-              `${msg.isOutgoing ? '→' : '←'} ${msg.senderName || msg.senderId || 'Unknown'}\n` +
-              `${msg.text || '[Media message]'}\n` +
-              '---\n'
-            ).join('\n'),
-        },
-      ],
-    };
-  }
-
-  private async markAsRead(client: TelegramClient, args: any) {
-    await client.markAsRead(args.chatId, args.messageIds);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `✅ **Messages marked as read**\n\n` +
-            `• **Chat ID:** ${args.chatId}\n` +
-            `• **Message IDs:** ${args.messageIds.join(', ')}\n` +
-            `• **Count:** ${args.messageIds.length} messages`,
-        },
-      ],
-    };
-  }
-
-  private async getUserInfo(client: TelegramClient, args: any) {
-    const userInfo = await client.getUserInfo(args.userId);
-    
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `**User Information:**\n\n` +
-            `• **Name:** ${userInfo.firstName}${userInfo.lastName ? ' ' + userInfo.lastName : ''}\n` +
-            `• **ID:** ${userInfo.id}\n` +
-            (userInfo.username ? `• **Username:** @${userInfo.username}\n` : '') +
-            (userInfo.phone ? `• **Phone:** ${userInfo.phone}\n` : '') +
-            `• **Is Bot:** ${userInfo.isBot ? 'Yes' : 'No'}\n` +
-            (userInfo.isVerified ? `• **Verified:** Yes\n` : '') +
-            (userInfo.isScam ? `• **Scam:** Yes\n` : '') +
-            (userInfo.isFake ? `• **Fake:** Yes\n` : '') +
-            (userInfo.status ? `• **Status:** ${userInfo.status}\n` : ''),
-        },
-      ],
-    };
   }
 
   private setupErrorHandling() {

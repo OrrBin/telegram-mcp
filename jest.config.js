@@ -16,7 +16,7 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@modelcontextprotocol|zod)/)'
+    'node_modules/(?!(@modelcontextprotocol|zod|prebuilt-tdlib|tdl)/)'
   ],
   collectCoverageFrom: [
     'src/**/*.ts',

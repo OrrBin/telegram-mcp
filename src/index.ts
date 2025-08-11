@@ -246,28 +246,28 @@ class TelegramMCPServer {
 
         switch (name) {
           case 'list_chats':
-            return await this.chatHandler!.listChats(args as any);
+            return await this.chatHandler!.listChats(args);
 
           case 'get_chat_info':
-            return await this.chatHandler!.getChatInfo(args as any);
+            return await this.chatHandler!.getChatInfo(args);
 
           case 'search_chats':
-            return await this.chatHandler!.searchChats(args as any);
+            return await this.chatHandler!.searchChats(args);
 
           case 'get_messages':
-            return await this.messageHandler!.getMessages(args as any);
+            return await this.messageHandler!.getMessages(args);
 
           case 'send_message':
-            return await this.messageHandler!.sendMessage(args as any);
+            return await this.messageHandler!.sendMessage(args);
 
           case 'search_messages':
-            return await this.messageHandler!.searchMessages(args as any);
+            return await this.messageHandler!.searchMessages(args);
 
           case 'mark_as_read':
-            return await this.messageHandler!.markAsRead(args as any);
+            return await this.messageHandler!.markAsRead(args);
 
           case 'get_user_info':
-            return await this.userHandler!.getUserInfo(args as any);
+            return await this.userHandler!.getUserInfo(args);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

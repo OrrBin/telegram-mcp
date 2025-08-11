@@ -1,15 +1,13 @@
 import type { TelegramClient } from '../telegram/client.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-
-export interface GetUserInfoArgs {
-  userId: string;
-}
+import { GetUserInfoSchema, type GetUserInfoInput } from '../schemas/index.js';
 
 export class UserHandler {
   constructor(private client: TelegramClient) {}
 
-  async getUserInfo(args: GetUserInfoArgs): Promise<CallToolResult> {
-    const userInfo = await this.client.getUserInfo(args.userId);
+  async getUserInfo(args: unknown): Promise<CallToolResult> {
+    const validated = GetUserInfoSchema.parse(args);
+    const userInfo = await this.client.getUserInfo(validated.userId);
     
     return {
       content: [

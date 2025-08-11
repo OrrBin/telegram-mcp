@@ -1,24 +1,20 @@
 import type { TelegramClient } from '../telegram/client.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-
-export interface ListChatsArgs {
-  limit?: number;
-}
-
-export interface GetChatInfoArgs {
-  chatId: string;
-}
-
-export interface SearchChatsArgs {
-  query: string;
-  limit?: number;
-}
+import { 
+  ListChatsSchema, 
+  GetChatInfoSchema, 
+  SearchChatsSchema,
+  type ListChatsInput,
+  type GetChatInfoInput,
+  type SearchChatsInput
+} from '../schemas/index.js';
 
 export class ChatHandler {
   constructor(private client: TelegramClient) {}
 
-  async listChats(args: ListChatsArgs): Promise<CallToolResult> {
-    const limit = args.limit || 50;
+  async listChats(args: unknown): Promise<CallToolResult> {
+    const validated = ListChatsSchema.parse(args);
+    const limit = validated.limit || 50;
     const chats = await this.client.getChats(limit);
     
     return {
@@ -38,8 +34,9 @@ export class ChatHandler {
     };
   }
 
-  async getChatInfo(args: GetChatInfoArgs): Promise<CallToolResult> {
-    const chatInfo = await this.client.getChatInfo(args.chatId);
+  async getChatInfo(args: unknown): Promise<CallToolResult> {
+    const validated = GetChatInfoSchema.parse(args);
+    const chatInfo = await this.client.getChatInfo(validated.chatId);
     
     return {
       content: [
@@ -60,20 +57,21 @@ export class ChatHandler {
     };
   }
 
-  async searchChats(args: SearchChatsArgs): Promise<CallToolResult> {
+  async searchChats(args: unknown): Promise<CallToolResult> {
+    const validated = SearchChatsSchema.parse(args);
     const allChats = await this.client.getChats(200);
     const filteredChats = allChats
       .filter(chat => 
-        chat.title.toLowerCase().includes(args.query.toLowerCase()) ||
-        (chat.username && chat.username.toLowerCase().includes(args.query.toLowerCase()))
+        chat.title.toLowerCase().includes(validated.query.toLowerCase()) ||
+        (chat.username && chat.username.toLowerCase().includes(validated.query.toLowerCase()))
       )
-      .slice(0, args.limit || 20);
+      .slice(0, validated.limit || 20);
     
     return {
       content: [
         {
           type: 'text' as const,
-          text: `Found ${filteredChats.length} chats matching "${args.query}":\n\n` +
+          text: `Found ${filteredChats.length} chats matching "${validated.query}":\n\n` +
             filteredChats.map(chat => 
               `• **${chat.title}** (${chat.type})\n` +
               `  ID: ${chat.id}\n` +

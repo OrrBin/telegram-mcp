@@ -6,6 +6,7 @@ import { dirname } from 'path';
 import readline from 'readline';
 import type { TelegramConfig, ChatInfo, MessageInfo, UserInfo, SearchResult } from './types.js';
 import { Config } from '../config/index.js';
+import { Logger } from '../utils/Logger.js';
 
 export class TelegramClient {
   private client: ReturnType<typeof createClient>;
@@ -39,13 +40,13 @@ export class TelegramClient {
     const appConfig = Config.getInstance();
     
     this.client.on('error', (error: any) => {
-      console.error('Telegram client error:', error);
+      Logger.error('Telegram client error', error);
     });
 
     this.client.on('update', (update: any) => {
       // Handle real-time updates if needed
       if (appConfig.isDevelopment()) {
-        console.error('Update received:', update._);
+        Logger.debug('Telegram update received', { updateType: update._ });
       }
     });
   }
@@ -54,7 +55,7 @@ export class TelegramClient {
     if (this.isConnected) return;
 
     try {
-      console.error('Connecting to Telegram...');
+      Logger.info('Connecting to Telegram...');
       await this.client.login(() => ({
         type: 'user' as const,
         getPhoneNumber: () => Promise.resolve(this.config.phone),
@@ -64,9 +65,9 @@ export class TelegramClient {
       }));
 
       this.isConnected = true;
-      console.error('Successfully connected to Telegram');
+      Logger.info('Successfully connected to Telegram');
     } catch (error) {
-      console.error('Failed to connect to Telegram:', error);
+      Logger.error('Failed to connect to Telegram', error as Error);
       throw new Error(`Telegram connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

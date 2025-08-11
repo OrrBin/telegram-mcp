@@ -13,6 +13,7 @@ import { ChatHandler } from './handlers/ChatHandler.js';
 import { MessageHandler } from './handlers/MessageHandler.js';
 import { UserHandler } from './handlers/UserHandler.js';
 import { Config } from './config/index.js';
+import { Logger } from './utils/Logger.js';
 
 class TelegramMCPServer {
   private server: Server;
@@ -258,7 +259,7 @@ class TelegramMCPServer {
 
   private setupErrorHandling() {
     this.server.onerror = (error) => {
-      console.error('[MCP Error]', error);
+      Logger.error('MCP Server error', error);
     };
 
     process.on('SIGINT', async () => {
@@ -273,26 +274,26 @@ class TelegramMCPServer {
   }
 
   private async cleanup() {
-    console.error('Shutting down Telegram MCP Server...');
+    Logger.info('Shutting down Telegram MCP Server...');
     try {
       if (this.telegramClient) {
         await this.telegramClient.disconnect();
       }
     } catch (error) {
-      console.error('Error during cleanup:', error);
+      Logger.error('Error during cleanup', error as Error);
     }
   }
 
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Telegram MCP Server running on stdio');
+    Logger.info('Telegram MCP Server running on stdio');
   }
 }
 
 // Start the server
 const server = new TelegramMCPServer();
 server.run().catch((error) => {
-  console.error('Failed to start server:', error);
+  Logger.error('Failed to start server', error);
   process.exit(1);
 });

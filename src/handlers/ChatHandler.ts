@@ -9,15 +9,24 @@ import {
   type SearchChatsInput
 } from '../schemas/index.js';
 import { ErrorHandler } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 
 export class ChatHandler {
   constructor(private client: TelegramClient) {}
 
   async listChats(args: unknown): Promise<CallToolResult> {
     return ErrorHandler.withErrorHandling(async () => {
+      const start = Date.now();
+      Logger.operation('list_chats', { args });
+      
       const validated = ListChatsSchema.parse(args);
       const limit = validated.limit || 50;
       const chats = await this.client.getChats(limit);
+      
+      Logger.performance('list_chats', Date.now() - start, { 
+        chatCount: chats.length, 
+        limit 
+      });
       
       return {
         content: [

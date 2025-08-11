@@ -241,45 +241,35 @@ class TelegramMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
-      try {
-        await this.getTelegramClient();
+      await this.getTelegramClient();
 
-        switch (name) {
-          case 'list_chats':
-            return await this.chatHandler!.listChats(args);
+      switch (name) {
+        case 'list_chats':
+          return await this.chatHandler!.listChats(args);
 
-          case 'get_chat_info':
-            return await this.chatHandler!.getChatInfo(args);
+        case 'get_chat_info':
+          return await this.chatHandler!.getChatInfo(args);
 
-          case 'search_chats':
-            return await this.chatHandler!.searchChats(args);
+        case 'search_chats':
+          return await this.chatHandler!.searchChats(args);
 
-          case 'get_messages':
-            return await this.messageHandler!.getMessages(args);
+        case 'get_messages':
+          return await this.messageHandler!.getMessages(args);
 
-          case 'send_message':
-            return await this.messageHandler!.sendMessage(args);
+        case 'send_message':
+          return await this.messageHandler!.sendMessage(args);
 
-          case 'search_messages':
-            return await this.messageHandler!.searchMessages(args);
+        case 'search_messages':
+          return await this.messageHandler!.searchMessages(args);
 
-          case 'mark_as_read':
-            return await this.messageHandler!.markAsRead(args);
+        case 'mark_as_read':
+          return await this.messageHandler!.markAsRead(args);
 
-          case 'get_user_info':
-            return await this.userHandler!.getUserInfo(args);
+        case 'get_user_info':
+          return await this.userHandler!.getUserInfo(args);
 
-          default:
-            throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-        }
-      } catch (error) {
-        if (error instanceof McpError) {
-          throw error;
-        }
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
+        default:
+          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
     });
   }

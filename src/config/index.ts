@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { config } from 'dotenv';
 import type { TelegramConfig } from '../telegram/types.js';
+
+// Load environment variables from .env file
+config();
 
 const TelegramConfigSchema = z.object({
   apiId: z.string().transform(val => parseInt(val, 10)),

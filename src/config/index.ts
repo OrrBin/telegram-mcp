@@ -1,9 +1,21 @@
 import { z } from 'zod';
-import { config } from 'dotenv';
 import type { TelegramConfig } from '../telegram/types.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
-// Load environment variables from .env file
-config();
+// Silently load .env file without stdout pollution
+try {
+  const envPath = resolve(process.cwd(), '.env');
+  const envContent = readFileSync(envPath, 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].trim();
+    }
+  });
+} catch {
+  // .env file not found or not readable - env vars should come from MCP config
+}
 
 const TelegramConfigSchema = z.object({
   apiId: z.string().transform(val => parseInt(val, 10)),

@@ -56,19 +56,19 @@ SESSION_DIR=./session
 npm run build
 ```
 
-### 5. First Run (Authentication)
+### 5. Authentication
 
-The first time you run the server, you'll need to authenticate:
+Before using the MCP server, you need to authenticate with Telegram. Run the standalone authentication script:
 
 ```bash
-npm start
+npm run auth
 ```
 
 You'll be prompted to:
 1. Enter the verification code sent to your Telegram app
 2. If you have 2FA enabled, enter your password
 
-The session will be saved locally, so you won't need to authenticate again.
+The session will be saved in the `session/` directory and reused automatically by the MCP server.
 
 ## MCP Client Configuration
 
